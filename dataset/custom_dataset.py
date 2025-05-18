@@ -9,6 +9,7 @@ from utils import *
 import cv2
 import sys
 
+from dataset.utils import readHDR, log_minmax, align_rotation
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -44,7 +45,7 @@ class HDRRealDataset(Dataset):
         """
         super().__init__()
         assert split in ["train", "val", "test"], "Split must be one of ['train', 'val', 'test']"
-        assert abs(sum(split_ratios) - 1.0) < 1e-5, "Split ratios must sum to 1.0"
+        #assert abs(sum(split_ratios) - 1.0) < 1e-5, "Split ratios must sum to 1.0"
 
         self.root_dir = root_dir
         self.transforms = transforms
@@ -76,13 +77,14 @@ class HDRRealDataset(Dataset):
         total = len(self.filenames)
         train_end = int(total * split_ratios[0])
         val_end = train_end + int(total * split_ratios[1])
+        test_end = val_end + int(total* split_ratios[2])
 
         if split == "train":
             self.filenames = self.filenames[:train_end]
         elif split == "val":
             self.filenames = self.filenames[train_end:val_end]
         else:  # test
-            self.filenames = self.filenames[val_end:]
+            self.filenames = self.filenames[val_end:test_end]
 
     def __len__(self) -> int:
         return len(self.filenames)
@@ -104,8 +106,8 @@ class HDRRealDataset(Dataset):
         ldr_img = cv2.cvtColor(ldr_img, cv2.COLOR_BGR2RGB)  # Convert to RGB
         hdr_img = readHDR(hdr_path)  # float32
 
-        print("Min HDR:", np.min(hdr_img))
-        print("Max HDR:", np.max(hdr_img))
+        #print("Min HDR:", np.min(hdr_img))
+        #print("Max HDR:", np.max(hdr_img))
 
         # HDR Preprocessing
         hdr_img_log = log_minmax(hdr_img)
@@ -122,8 +124,8 @@ class HDRRealDataset(Dataset):
         if self.normalize_imgnet1k:
             ldr_img_tensor = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])(ldr_img_tensor)
         
-        print("LDR image shape: ",ldr_img_tensor.shape)
-        print("HDR image shape: ",hdr_log_tensor.shape)
+        #print("LDR image shape: ",ldr_img_tensor.shape)
+        #print("HDR image shape: ",hdr_log_tensor.shape)
         # Check if images are aligned
         
 
@@ -131,11 +133,11 @@ class HDRRealDataset(Dataset):
 
         # create a stack stensor with size [2, 3, H, W]
         stack = torch.stack([ldr_img_tensor, hdr_log_tensor], dim=0)
-        print("Stack shape:", stack.shape)
+        #print("Stack shape:", stack.shape)
 
         # make stack to [6, H, W]
         stack = stack.view(2*3, stack.shape[2], stack.shape[3])
-        print("Stack shape after view:", stack.shape)
+        #print("Stack shape after view:", stack.shape)
         
         # Apply transformations if provided
         if self.transforms:
