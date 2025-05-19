@@ -32,6 +32,8 @@ def get_test_args():
     parser.add_argument('--val_ratio', type=float, default=0.1, help='Validation ratio for dataset split')
     parser.add_argument('--test_ratio', type=float, default=0.1, help='Test ratio for dataset split')
     parser.add_argument('--model', type=str, default='model_a', choices=['model_a', 'unet','model_b'], help='Which model architecture to use')
+    parser.add_argument('--save_n', type=int, default=4, help='How many test images would be saved')
+    
 
 
     return parser.parse_args()

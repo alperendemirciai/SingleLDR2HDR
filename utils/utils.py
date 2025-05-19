@@ -124,6 +124,7 @@ def calculate_psnr(img1, img2, max_val=1.0):
         return float('inf')
     return 20 * torch.log10(max_val / torch.sqrt(mse))
 
+
 def save_some_examples(gen, val_loader, epoch, folder, device, num_samples=4, denorm=False):
     """
     Save a grid of sample outputs from the generator
@@ -137,7 +138,6 @@ def save_some_examples(gen, val_loader, epoch, folder, device, num_samples=4, de
         num_samples: Number of samples to visualize
         denorm: Whether to denormalize images from [-1, 1] to [0, 1]
     """
-    # Create directory if it doesn't exist
     os.makedirs(folder, exist_ok=True)
     
     batch = next(iter(val_loader))
@@ -147,47 +147,61 @@ def save_some_examples(gen, val_loader, epoch, folder, device, num_samples=4, de
         y = batch["hdr_log_01"] * 2 - 1
     else:
         raise ValueError("Expected dict from val_loader, got something else.")
+        
     x, y = x[:num_samples].to(device), y[:num_samples].to(device)
 
-    
     gen.eval()
     with torch.no_grad():
         y_fake = gen(x)
         gen.train()
 
-        y_fake = (y_fake + 1.0) /2.0
+        # Rescale from [-1, 1] to [0, 1] if needed
         x = (x + 1.0) / 2.0
         y = (y + 1.0) / 2.0
-        
-        # Create grid of images
-        # Input RGB images
+        y_fake = (y_fake + 1.0) / 2.0
+
+        # Visualization grids
         x_grid = make_grid(x, nrow=num_samples, normalize=True, value_range=(-1, 1) if denorm else None)
-        # Target IR images
         y_grid = make_grid(y, nrow=num_samples, normalize=True, value_range=(-1, 1) if denorm else None)
-        # Generated IR images
         y_fake_grid = make_grid(y_fake, nrow=num_samples, normalize=True, value_range=(-1, 1) if denorm else None)
-        
-        # Convert to numpy and transpose
+
+        # Exp versions (HDR)
+        y_exp = torch.exp(y)
+        y_fake_exp = torch.exp(y_fake)
+
+        y_exp_grid = make_grid(y_exp, nrow=num_samples, normalize=True, value_range=(0, 1) if denorm else None)
+        y_fake_exp_grid = make_grid(y_fake_exp, nrow=num_samples, normalize=True, value_range=(0, 1) if denorm else None)
+
+        # Convert to numpy for plotting
         x_grid = x_grid.cpu().numpy().transpose(1, 2, 0)
         y_grid = y_grid.cpu().numpy().transpose(1, 2, 0)
         y_fake_grid = y_fake_grid.cpu().numpy().transpose(1, 2, 0)
-        
+        y_exp_grid = y_exp_grid.cpu().numpy().transpose(1, 2, 0)
+        y_fake_exp_grid = y_fake_exp_grid.cpu().numpy().transpose(1, 2, 0)
+
         # Create figure with subplots
-        fig, axs = plt.subplots(3, 1, figsize=(12, 12))
+        fig, axs = plt.subplots(5, 1, figsize=(15, 15))
         
-        # Plot images
         axs[0].imshow(x_grid)
         axs[0].set_title(f"Input RGB - Epoch {epoch}")
         axs[0].axis('off')
         
         axs[1].imshow(y_grid)
-        axs[1].set_title(f"Target IR - Epoch {epoch}")
+        axs[1].set_title(f"Target log HDR - Epoch {epoch}")
         axs[1].axis('off')
         
         axs[2].imshow(y_fake_grid)
-        axs[2].set_title(f"Generated IR - Epoch {epoch}")
+        axs[2].set_title(f"Generated log HDR - Epoch {epoch}")
         axs[2].axis('off')
-        
+
+        axs[3].imshow(y_exp_grid)
+        axs[3].set_title(f"Target HDR - Epoch {epoch}")
+        axs[3].axis('off')
+
+        axs[4].imshow(y_fake_exp_grid)
+        axs[4].set_title(f"Generated HDR - Epoch {epoch}")
+        axs[4].axis('off')
+
         plt.tight_layout()
         plt.savefig(os.path.join(folder, f"epoch_{epoch}.png"))
         plt.close()
