@@ -45,38 +45,75 @@ def normalize_mean_std(img: np.ndarray, means: List[float], stds: List[float]) -
     img = (img - means) / stds
     return img
 
-def align_rotation(image1: torch.Tensor, image2: torch.Tensor, threshold: float = 0.8) -> tuple:
+
+def align_rotation(image1: torch.Tensor, image2: torch.Tensor, threshold: float = 0.8, patch_size: int = 100) -> tuple:
+    def center_crop(img: np.ndarray, size: int) -> np.ndarray:
+        h, w = img.shape[:2]
+        ch, cw = h // 2, w // 2
+        half = size // 2
+        return img[ch - half: ch + half, cw - half: cw + half]
+
     img1_np = image1.permute(1, 2, 0).cpu().numpy()
     img2_np = image2.permute(1, 2, 0).cpu().numpy()
-    
+
     img1_gray = cv2.cvtColor(img1_np, cv2.COLOR_RGB2GRAY)
     img2_gray = cv2.cvtColor(img2_np, cv2.COLOR_RGB2GRAY)
-    
-    min_size = min(img1_gray.shape[:2])
-    win_size = min(7, min_size)
 
-    data_range = img1_gray.max() - img1_gray.min()
-    if data_range == 0:
-        data_range = 1.0
+    # Crop center patches
+    img1_patch = center_crop(img1_gray, patch_size)
+    img2_patch = center_crop(img2_gray, patch_size)
+
+    win_size = min(7, patch_size)
+    data_range = img1_patch.max() - img1_patch.min() or 1.0
 
     def compute_ssim(a, b):
         return ssim(a, b, win_size=win_size, data_range=data_range)
 
-    if compute_ssim(img1_gray, img2_gray) > threshold:
+    # 1. Direct match
+    if compute_ssim(img1_patch, img2_patch) > threshold:
         return image1, image2
 
+    # 2. Flip-only check
+    flip_variants = [
+        cv2.flip(img2_np, 0),
+        cv2.flip(img2_np, 1),
+        cv2.flip(img2_np, -1)
+    ]
+    flip_patches = [center_crop(cv2.cvtColor(f, cv2.COLOR_RGB2GRAY), patch_size) for f in flip_variants]
+    scores = [compute_ssim(img1_patch, fp) for fp in flip_patches]
+
+    if max(scores) > threshold:
+        best_idx = int(np.argmax(scores))
+        aligned = flip_variants[best_idx]
+        return image1, torch.from_numpy(aligned).permute(2, 0, 1).float()
+
+    # 3. Full search: rotation + flips
     rotations = [
         img2_np,
         cv2.rotate(img2_np, cv2.ROTATE_90_CLOCKWISE),
         cv2.rotate(img2_np, cv2.ROTATE_180),
         cv2.rotate(img2_np, cv2.ROTATE_90_COUNTERCLOCKWISE)
     ]
-    
-    gray_rotations = [cv2.cvtColor(r, cv2.COLOR_RGB2GRAY) for r in rotations]
-    scores = [compute_ssim(img1_gray, r) for r in gray_rotations]
-    
+
+    transformations = []
+    for rot in rotations:
+        transformations.extend([
+            rot,
+            cv2.flip(rot, 0),
+            cv2.flip(rot, 1),
+            cv2.flip(rot, -1)
+        ])
+
+    gray_patches = [center_crop(cv2.cvtColor(t, cv2.COLOR_RGB2GRAY), patch_size) for t in transformations]
+    scores = [compute_ssim(img1_patch, gp) for gp in gray_patches]
+
     best_idx = int(np.argmax(scores))
-    aligned_img2 = rotations[best_idx]
-    
+    best_score = scores[best_idx]
+
+    if best_score < threshold:
+        return image1, image2
+
+    aligned_img2 = transformations[best_idx]
     aligned_img2_tensor = torch.from_numpy(aligned_img2).permute(2, 0, 1).float()
+
     return image1, aligned_img2_tensor
