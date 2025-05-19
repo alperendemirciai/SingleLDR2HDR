@@ -43,7 +43,7 @@ def train_validate():
 
 
     optimizer_G = optim.AdamW(generator.parameters(), lr=args.lr, betas=(0.5, 0.999))
-    custom_loss = HDRLossWithLPIPS(lpips_weight=2)
+    custom_loss = HDRLossWithLPIPS(lpips_weight=2, l1_weight=3)
 
     transform = transforms.Compose([
         transforms.Resize((224, 224)),
