@@ -3,3 +3,6 @@ data/
 *.pyc
 *.ipynb
 *.hdr
+*.pdf
+outputs/
+assets/
