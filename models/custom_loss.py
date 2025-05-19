@@ -3,7 +3,7 @@ import torch.nn as nn
 import lpips  # You need to install the LPIPS library: pip install lpips
 
 class HDRLossWithLPIPS(nn.Module):
-    def __init__(self, alpha_map=None, use_alpha=True, lpips_weight=1.0):
+    def __init__(self, alpha_map=None, use_alpha=True, lpips_weight=1.0, l1_weight=1.0):
         super(HDRLossWithLPIPS, self).__init__()
 
         if torch.cuda.is_available():
@@ -17,6 +17,7 @@ class HDRLossWithLPIPS(nn.Module):
         self.use_alpha = use_alpha
         self.alpha_map = alpha_map
         self.lpips_weight = lpips_weight
+        self.l1_weight = l1_weight
         self.l1_loss = nn.L1Loss(reduction='none')
         self.lpips = lpips.LPIPS(net='vgg').to(device)  # Choose 'alex' or 'vgg'
     
@@ -33,6 +34,6 @@ class HDRLossWithLPIPS(nn.Module):
         # Assume pred and target_log_hdr are already in [-1, 1]
         lpips_loss = self.lpips(pred, target_log_hdr).mean()
 
-        total_loss = l1_loss + self.lpips_weight * lpips_loss
+        total_loss = l1_loss* self.l1_weight + self.lpips_weight * lpips_loss
         return total_loss
 
