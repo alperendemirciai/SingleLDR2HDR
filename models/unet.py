@@ -110,6 +110,7 @@ class UNet(nn.Module):
 
         # Final 1×1 conv
         self.out_conv = nn.Conv2d(base_filters, out_channels, kernel_size=1)
+        self.out_act = nn.Tanh()
 
 
     def forward(self, x, verbose = False):
@@ -156,7 +157,7 @@ class UNet(nn.Module):
         if x.shape[2] != original_h or x.shape[3] != original_w:
             x = F.interpolate(x, size=(original_h, original_w), mode='bilinear', align_corners=True)
         
-        return x
+        return self.out_act(x)
 
 
 if __name__ == "__main__":
