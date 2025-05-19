@@ -14,6 +14,7 @@ def get_train_val_args():
     parser.add_argument('--train_ratio', type=float, default=0.8, help='Train ratio for dataset split')
     parser.add_argument('--val_ratio', type=float, default=0.1, help='Validation ratio for dataset split')
     parser.add_argument('--test_ratio', type=float, default=0.1, help='Test ratio for dataset split')
+    parser.add_argument('--model', type=str, default='model_a', choices=['model_a', 'unet','model_b'], help='Which model architecture to use')
 
 
 
@@ -30,6 +31,8 @@ def get_test_args():
     parser.add_argument('--train_ratio', type=float, default=0.8, help='Train ratio for dataset split')
     parser.add_argument('--val_ratio', type=float, default=0.1, help='Validation ratio for dataset split')
     parser.add_argument('--test_ratio', type=float, default=0.1, help='Test ratio for dataset split')
+    parser.add_argument('--model', type=str, default='model_a', choices=['model_a', 'unet','model_b'], help='Which model architecture to use')
+
 
     return parser.parse_args()
 

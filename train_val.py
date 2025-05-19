@@ -1,3 +1,6 @@
+import models.model_a
+import models.model_b
+import models.unet
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -11,7 +14,7 @@ import numpy as np
 from utils.argparser import get_train_val_args
 from utils.utils import *
 
-from models.model import Autoencoder
+import models
 from models.custom_loss import HDRLossWithLPIPS
 from dataset.custom_dataset import HDRRealDataset
 
@@ -31,7 +34,13 @@ def train_validate():
     )
     print(f"Using device: {device}")
 
-    generator = Autoencoder(upsample_mode=args.upsampling_method).to(device)
+    if args.model == 'unet':
+        generator = models.unet.UNet(in_channels=3, out_channels= 3, base_filters= 16, upsampling_method= args.upsampling_method).to(device)
+    elif args.model == 'model_a':
+        generator = models.model_a.Autoencoder(upsample_mode=args.upsampling_method).to(device)
+    elif args.model == 'model_b':
+        generator = models.model_b.MobileNetV3_UNet(3).to(device)
+
 
     optimizer_G = optim.AdamW(generator.parameters(), lr=args.lr, betas=(0.5, 0.999))
     custom_loss = HDRLossWithLPIPS(lpips_weight=2)
