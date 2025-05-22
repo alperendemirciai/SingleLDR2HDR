@@ -7,7 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from torchvision.utils import make_grid
 from PIL import Image
-
+import cv2
 
 
 def calculate_ssim(img1, img2, data_range=2.0):
@@ -253,3 +253,24 @@ def plot_metric(metric, metric_name, folder, epoch):
     os.makedirs(folder, exist_ok=True)
     plt.savefig(os.path.join(folder, f"{metric_name}_epoch_{epoch}.png"))
     plt.close()
+
+
+def hdr_tonemapping(image_path, operator='reinhard'):
+    hdr_img = cv2.imread(image_path, cv2.IMREAD_UNCHANGED)
+
+    if hdr_img is None:
+        raise ValueError(f"Image not found at {image_path}")
+    
+    if operator == 'reinhard':
+        tonemapped_img = cv2.createTonemapReinhard(gamma=1.5, intensity=0.0, light_adapt=1.0, color_adapt=0.0).process(hdr_img)
+    elif operator == 'drago':
+        tonemapped_img = cv2.createTonemapDrago(gamma=1.0, saturation=1.0, bias=0.85).process(hdr_img)
+    elif operator == 'mantiuk':
+        tonemapped_img = cv2.createTonemapMantiuk(gamma=2.2, scale=0.85, saturation=1.2).process(hdr_img)
+    else:
+        raise ValueError(f"Unknown tonemapping operator: {operator}")
+    
+    tonemapped_img = cv2.normalize(tonemapped_img, None, 0, 255, cv2.NORM_MINMAX)
+    tonemapped_img = np.uint8(tonemapped_img)
+    return tonemapped_img
+    
