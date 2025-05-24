@@ -4,5 +4,6 @@ data/
 *.ipynb
 *.hdr
 *.pdf
-outputs/
+outputs_01hdr/
+outputs_loghdr/
 assets/
