@@ -9,7 +9,7 @@ from tqdm import tqdm
 import numpy as np
 
 from utils.argparser import get_test_args
-from utils.utils import calculate_psnr, save_some_examples, load_checkpoint
+from utils.utils import calculate_psnr, save_some_examples_plots, load_checkpoint, save_some_examples
 from models.custom_loss import HDRLossWithLPIPS
 from dataset.custom_dataset import HDRRealDataset
 from torchmetrics.functional import structural_similarity_index_measure
@@ -50,7 +50,8 @@ def test():
         split="test",
         split_ratios=(args.train_ratio, args.val_ratio, args.test_ratio),
         random_seed=args.random_state,
-        transforms=transform
+        transforms=transform,
+        normalize_imgnet1k=True
     )
 
     test_loader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
@@ -66,8 +67,8 @@ def test():
     loop = tqdm(test_loader, desc="Testing")
 
     for batch in loop:
-        input_img = batch["ldr_nonlinear_01"].to(device) * 2 - 1
-        target_img = batch["hdr_log_01"].to(device) * 2 - 1
+        input_img = batch["ldr_nonlinear_01"].to(device) * 2.0 - 1.0
+        target_img = batch["hdr_log_01"].to(device) * 2.0 - 1.0
 
         gen_output = generator(input_img)
         loss = custom_loss(gen_output, target_img)
@@ -91,7 +92,11 @@ def test():
     print(f"SSIM: {test_ssim_avg:.4f}")
 
     # Save a few output samples
-    save_some_examples(generator, test_loader, epoch="test", folder=os.path.join(args.save_dir, f"test_results_{args.random_state}"), device=device, denorm=False, num_samples=args.save_n)
+    
+    save_some_examples(generator, test_loader, epoch="test", folder=os.path.join(args.save_dir, f"test_results_{args.random_state}"), 
+                       device=device, denorm=False, num_samples=args.save_n, imgnet_denorm=( test_dataset.normalize_imgnet1k))
+    save_some_examples_plots(generator, test_loader, epoch="test", folder=os.path.join(args.save_dir, f"test_results_{args.random_state}"), 
+                             device=device, denorm=False, num_samples=args.save_n, imgnet_denorm=( test_dataset.normalize_imgnet1k))
 
 if __name__ == '__main__':
     test()

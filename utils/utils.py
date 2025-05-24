@@ -127,7 +127,7 @@ def calculate_psnr(img1, img2, max_val=1.0):
     return 20 * torch.log10(max_val / torch.sqrt(mse))
 
 
-def save_some_examples_plots(gen, val_loader, epoch, folder, device, num_samples=4, denorm=False):
+def save_some_examples_plots(gen, val_loader, epoch, folder, device, num_samples=4, denorm=True, imgnet_denorm=True):
     """
     Save a grid of sample outputs from the generator
     
@@ -145,12 +145,15 @@ def save_some_examples_plots(gen, val_loader, epoch, folder, device, num_samples
     batch = next(iter(val_loader))
 
     if isinstance(batch, dict):
-        x = batch["ldr_nonlinear_01"] * 2 - 1
-        y = batch["hdr_log_01"] * 2 - 1
+        x_b = batch["ldr_nonlinear_01"] * 2 - 1
+        y_b = batch["hdr_log_01"] * 2 - 1
     else:
         raise ValueError("Expected dict from val_loader, got something else.")
         
-    x, y = x[:num_samples].to(device), y[:num_samples].to(device)
+    x = x_b[:num_samples].clone().to(device)
+    y = y_b[:num_samples].clone().to(device)
+
+    #print("X_maxmin: ", x.max(), x.min())
 
     gen.eval()
     with torch.no_grad():
@@ -159,6 +162,11 @@ def save_some_examples_plots(gen, val_loader, epoch, folder, device, num_samples
 
         # Rescale from [-1, 1] to [0, 1] if needed
         x = (x + 1.0) / 2.0
+        if imgnet_denorm:
+            imagenet_mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1).to(device)
+            imagenet_std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1).to(device)
+            x = x * imagenet_std + imagenet_mean
+
         y = (y + 1.0) / 2.0
         y_fake = (y_fake + 1.0) / 2.0
 
@@ -168,8 +176,8 @@ def save_some_examples_plots(gen, val_loader, epoch, folder, device, num_samples
         y_fake_grid = make_grid(y_fake, nrow=num_samples, normalize=True, value_range=(-1, 1) if denorm else None)
 
         # Exp versions (HDR)
-        y_exp = torch.exp(y)
-        y_fake_exp = torch.exp(y_fake)
+        y_exp = torch.exp(y) + 1.0
+        y_fake_exp = torch.exp(y_fake) + 1.0
 
         y_exp_grid = make_grid(y_exp, nrow=num_samples, normalize=True, value_range=(0, 1) if denorm else None)
         y_fake_exp_grid = make_grid(y_fake_exp, nrow=num_samples, normalize=True, value_range=(0, 1) if denorm else None)
@@ -208,40 +216,49 @@ def save_some_examples_plots(gen, val_loader, epoch, folder, device, num_samples
         plt.savefig(os.path.join(folder, f"epoch_{epoch}.png"))
         plt.close()
 
-def save_some_examples(gen, val_loader, epoch, folder, device, num_samples=4, denorm=True):
+def save_some_examples(gen, val_loader, epoch, folder, device, num_samples=4, denorm=True, imgnet_denorm=True):
     os.makedirs(folder, exist_ok=True)
     
     batch = next(iter(val_loader))
 
     if isinstance(batch, dict):
-        x = batch["ldr_nonlinear_01"] * 2 - 1
-        y = batch["hdr_log_01"] * 2 - 1
+        x_b = batch["ldr_nonlinear_01"] * 2.0 - 1.0
+        y_b = batch["hdr_log_01"] * 2.0 - 1.0
     else:
         raise ValueError("Expected dict from val_loader, got something else.")
         
-    x, y = x[:num_samples].to(device), y[:num_samples].to(device)
-    
+    x = x_b[:num_samples].clone().to(device)
+    y = y_b[:num_samples].clone().to(device)
+
     gen.eval()
     with torch.no_grad():
         y_fake = gen(x)
+        x = (x + 1.0) / 2.0
     gen.train()
+
+    if imgnet_denorm:
+        imagenet_mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1).to(device)
+        imagenet_std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1).to(device)
+        x = x * imagenet_std + imagenet_mean
 
     for i in range(num_samples):
         input_img = x[i].cpu()
         target_img = y[i].cpu()
         pred_img = y_fake[i].cpu()
 
-        input_img = (input_img + 1.0) / 2.0
+        #print("Input og: ",input_img.max(), input_img.min())
+
         target_img = (target_img + 1.0) / 2.0
         pred_img = (pred_img + 1.0) / 2.0
 
-        pred_img -= pred_img.min()
-        pred_img = pred_img *(1.0/pred_img.max()) 
+        #pred_img -= pred_img.min()
+        #pred_img = pred_img *(1.0/pred_img.max()) 
 
 
-        print(input_img.max(), input_img.min())
-        print(target_img.max(), target_img.min())
-        print(pred_img.max(), pred_img.min())
+        #print(input_img.max(), input_img.min())
+        #print(target_img.max(), target_img.min())
+        #print(pred_img.max(), pred_img.min())
+
         
 
         input_img = TF.to_pil_image(input_img)

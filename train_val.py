@@ -56,7 +56,8 @@ def train_validate():
         split="train",
         split_ratios=(args.train_ratio, args.val_ratio, args.test_ratio),
         random_seed=args.random_state,
-        transforms=transform
+        transforms=transform,
+        normalize_imgnet1k=True
     )
 
     val_dataset = HDRRealDataset(
@@ -64,7 +65,8 @@ def train_validate():
         split="val",
         split_ratios=(args.train_ratio, args.val_ratio, args.test_ratio),
         random_seed=args.random_state,
-        transforms=transform
+        transforms=transform,
+        normalize_imgnet1k=True
     )
 
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
@@ -156,7 +158,7 @@ def train_validate():
             os.makedirs(os.path.join(args.save_dir, "results"), exist_ok=True)
             save_some_examples(generator, val_loader, epoch + 1,
                                folder=os.path.join(args.save_dir, "results"),
-                               device=device, denorm=False)
+                               device=device, denorm=False, imgnet_denorm=( train_dataset.normalize_imgnet1k))
 
     print(f"Training completed. Best model at epoch {best_epoch} with PSNR: {best_val_psnr:.4f}")
 

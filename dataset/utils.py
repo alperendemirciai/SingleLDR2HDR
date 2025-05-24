@@ -63,12 +63,12 @@ def align_rotation(image1: torch.Tensor, image2: torch.Tensor, threshold: float 
     img1_patch = center_crop(img1_gray, patch_size)
     img2_patch = center_crop(img2_gray, patch_size)
 
-    win_size = min(7, patch_size)
+    #win_size = min(7, patch_size)
     data_range = img1_patch.max() - img1_patch.min() or 1.0
 
     def compute_ssim(a, b):
-        return ssim(a, b, win_size=win_size, data_range=data_range)
-
+        return ssim(a, b, win_size=7, data_range=data_range)
+    #print(compute_ssim(img1_patch, img2_patch))
     # 1. Direct match
     if compute_ssim(img1_patch, img2_patch) > threshold:
         return image1, image2
@@ -80,7 +80,9 @@ def align_rotation(image1: torch.Tensor, image2: torch.Tensor, threshold: float 
         cv2.flip(img2_np, -1)
     ]
     flip_patches = [center_crop(cv2.cvtColor(f, cv2.COLOR_RGB2GRAY), patch_size) for f in flip_variants]
-    scores = [compute_ssim(img1_patch, fp) for fp in flip_patches]
+    scores = []
+    for fp in flip_patches:
+        scores.append(compute_ssim(img1_patch, fp))
 
     if max(scores) > threshold:
         best_idx = int(np.argmax(scores))
@@ -105,7 +107,9 @@ def align_rotation(image1: torch.Tensor, image2: torch.Tensor, threshold: float 
         ])
 
     gray_patches = [center_crop(cv2.cvtColor(t, cv2.COLOR_RGB2GRAY), patch_size) for t in transformations]
-    scores = [compute_ssim(img1_patch, gp) for gp in gray_patches]
+    scores = []
+    for gp in gray_patches:
+        scores.append(compute_ssim(img1_patch, gp))
 
     best_idx = int(np.argmax(scores))
     best_score = scores[best_idx]

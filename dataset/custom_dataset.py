@@ -10,7 +10,7 @@ import cv2
 import sys
 
 from dataset.utils import readHDR, log_minmax, align_rotation
-
+#from utils import * 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -129,7 +129,7 @@ class HDRRealDataset(Dataset):
         # Check if images are aligned
         
 
-        ldr_img_tensor, hdr_log_tensor = align_rotation(ldr_img_tensor, hdr_log_tensor)
+        ldr_img_tensor, hdr_log_tensor = align_rotation(ldr_img_tensor, hdr_log_tensor, threshold=0.4)
 
         # create a stack stensor with size [2, 3, H, W]
         stack = torch.stack([ldr_img_tensor, hdr_log_tensor], dim=0)
@@ -185,11 +185,13 @@ if __name__ == "__main__":
         plt.imshow(ldr_img)
         plt.title("LDR Image")
         plt.axis("off")
+        print(ldr_img.max(), ldr_img.min())
 
         plt.subplot(1, 2, 2)
         plt.imshow(hdr_img)
         plt.title("HDR Image")
         plt.axis("off")
+        print(hdr_img.max(), hdr_img.min())
 
         plt.show()
         break
