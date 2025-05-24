@@ -49,7 +49,7 @@ def test():
         root_dir=args.data,
         random_seed=args.random_state,
         transforms=transform,
-        normalize_imgnet1k=False
+        normalize_imgnet1k=True
     )
 
     test_loader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
