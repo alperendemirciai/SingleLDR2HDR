@@ -8,6 +8,8 @@ import matplotlib.pyplot as plt
 from torchvision.utils import make_grid
 from PIL import Image
 import cv2
+import torchvision.transforms.functional as TF
+
 
 
 def calculate_ssim(img1, img2, data_range=2.0):
@@ -125,7 +127,7 @@ def calculate_psnr(img1, img2, max_val=1.0):
     return 20 * torch.log10(max_val / torch.sqrt(mse))
 
 
-def save_some_examples(gen, val_loader, epoch, folder, device, num_samples=4, denorm=False):
+def save_some_examples_plots(gen, val_loader, epoch, folder, device, num_samples=4, denorm=False):
     """
     Save a grid of sample outputs from the generator
     
@@ -205,6 +207,56 @@ def save_some_examples(gen, val_loader, epoch, folder, device, num_samples=4, de
         plt.tight_layout()
         plt.savefig(os.path.join(folder, f"epoch_{epoch}.png"))
         plt.close()
+
+def save_some_examples(gen, val_loader, epoch, folder, device, num_samples=4, denorm=True):
+    os.makedirs(folder, exist_ok=True)
+    
+    batch = next(iter(val_loader))
+
+    if isinstance(batch, dict):
+        x = batch["ldr_nonlinear_01"] * 2 - 1
+        y = batch["hdr_log_01"] * 2 - 1
+    else:
+        raise ValueError("Expected dict from val_loader, got something else.")
+        
+    x, y = x[:num_samples].to(device), y[:num_samples].to(device)
+    
+    gen.eval()
+    with torch.no_grad():
+        y_fake = gen(x)
+    gen.train()
+
+    for i in range(num_samples):
+        input_img = x[i].cpu()
+        target_img = y[i].cpu()
+        pred_img = y_fake[i].cpu()
+
+        input_img = (input_img + 1.0) / 2.0
+        target_img = (target_img + 1.0) / 2.0
+        pred_img = (pred_img + 1.0) / 2.0
+
+        pred_img -= pred_img.min()
+        pred_img = pred_img *(1.0/pred_img.max()) 
+
+
+        print(input_img.max(), input_img.min())
+        print(target_img.max(), target_img.min())
+        print(pred_img.max(), pred_img.min())
+        
+
+        input_img = TF.to_pil_image(input_img)
+        target_img = TF.to_pil_image(target_img)
+        pred_img = TF.to_pil_image(pred_img)
+
+        # Create subfolder for each triplet
+        triplet_folder = os.path.join(folder, f"img{i+1}_epoch{epoch}")
+        os.makedirs(triplet_folder, exist_ok=True)
+
+        input_img.save(os.path.join(triplet_folder, "input.png"))
+        target_img.save(os.path.join(triplet_folder, "target.png"))
+        pred_img.save(os.path.join(triplet_folder, "prediction.png"))
+
+
 
 def plot_metrics(train_metric, val_metric, metric_name, folder, epoch):
     """
