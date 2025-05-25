@@ -235,10 +235,11 @@ def writeHDR(img: np.ndarray, img_path: str) -> None:
     if not success:
         raise IOError(f"Failed to write HDR image to {img_path}")
 
+from skimage.metrics import peak_signal_noise_ratio as psnr
+from skimage.metrics import structural_similarity as ssim
 
 def save_some_examples(gen, val_loader, epoch, folder, device, num_samples=4, denorm=True, imgnet_denorm=True):
     os.makedirs(folder, exist_ok=True)
-    
     batch = next(iter(val_loader))
 
     if isinstance(batch, dict):
@@ -246,7 +247,7 @@ def save_some_examples(gen, val_loader, epoch, folder, device, num_samples=4, de
         y_b = batch["hdr_log_01"] * 2.0 - 1.0
     else:
         raise ValueError("Expected dict from val_loader, got something else.")
-        
+
     x = x_b[:num_samples].clone().to(device)
     y = y_b[:num_samples].clone().to(device)
 
@@ -257,11 +258,11 @@ def save_some_examples(gen, val_loader, epoch, folder, device, num_samples=4, de
     gen.train()
 
     if imgnet_denorm:
-        imagenet_mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1).to(device)
-        imagenet_std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1).to(device)
+        imagenet_mean = torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1).to(device)
+        imagenet_std = torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1).to(device)
         x = x * imagenet_std + imagenet_mean
 
-    y = torch.flip(y, dims=[1])        # Flips along channel axis
+    y = torch.flip(y, dims=[1])        # RGB to BGR
     y_fake = torch.flip(y_fake, dims=[1])
 
     for i in range(num_samples):
@@ -272,45 +273,60 @@ def save_some_examples(gen, val_loader, epoch, folder, device, num_samples=4, de
         target_img = (target_img + 1.0) / 2.0
         pred_img = (pred_img + 1.0) / 2.0
 
-        # Save LDRs
-        input_img_pil = TF.to_pil_image(input_img)
-        target_img_pil = TF.to_pil_image(target_img)
-        pred_img_pil = TF.to_pil_image(pred_img)
-
         triplet_folder = os.path.join(folder, f"img{i+1}_epoch{epoch}")
         os.makedirs(triplet_folder, exist_ok=True)
 
-        input_img_pil.save(os.path.join(triplet_folder, "input.png"))
-        target_img_pil.save(os.path.join(triplet_folder, "target.png"))
-        pred_img_pil.save(os.path.join(triplet_folder, "prediction.png"))
+        # Save input/target/pred PNG
+        TF.to_pil_image(input_img).save(os.path.join(triplet_folder, "input.png"))
+        TF.to_pil_image(target_img).save(os.path.join(triplet_folder, "target.png"))
+        TF.to_pil_image(pred_img).save(os.path.join(triplet_folder, "prediction.png"))
 
-        # Recover HDR and apply Reinhard tone mapping
+        # Recover HDR from log space
         target_hdr = torch.exp(target_img) + 1.0
         pred_hdr = torch.exp(pred_img) + 1.0
 
-        # Convert torch tensors to NumPy and ensure dtype float32
+        # Convert to NumPy
         target_hdr_np = target_hdr.numpy().transpose(1, 2, 0).astype(np.float32)
         pred_hdr_np = pred_hdr.numpy().transpose(1, 2, 0).astype(np.float32)
 
-        # Save HDR images
+        # Save HDR .hdr files
         writeHDR(target_hdr_np, os.path.join(triplet_folder, "target.hdr"))
         writeHDR(pred_hdr_np, os.path.join(triplet_folder, "prediction.hdr"))
 
-
-        def apply_reinhard_tonemap(hdr_tensor):
-            hdr = hdr_tensor.numpy().transpose(1, 2, 0).astype(np.float32)
+        # Reinhard tonemapping
+        def apply_reinhard_tonemap(hdr_np):
             tonemap = cv2.createTonemapReinhard(gamma=1.0, intensity=0.0, light_adapt=1.0, color_adapt=0.0)
-            ldr = tonemap.process(hdr)
+            ldr = tonemap.process(hdr_np)
             ldr = np.clip(ldr, 0, 1)
-            ldr = (ldr * 255).astype(np.uint8)
-            return Image.fromarray(ldr)
+            return (ldr * 255).astype(np.uint8)
 
-        reinhard_target = apply_reinhard_tonemap(target_hdr)
-        reinhard_pred = apply_reinhard_tonemap(pred_hdr)
+        reinhard_target = apply_reinhard_tonemap(target_hdr_np)
+        reinhard_pred = apply_reinhard_tonemap(pred_hdr_np)
 
-        reinhard_target.save(os.path.join(triplet_folder, "target_reinhard.png"))
-        reinhard_pred.save(os.path.join(triplet_folder, "prediction_reinhard.png"))
+        # Save Reinhard tonemapped images
+        Image.fromarray(reinhard_target).save(os.path.join(triplet_folder, "target_reinhard.png"))
+        Image.fromarray(reinhard_pred).save(os.path.join(triplet_folder, "prediction_reinhard.png"))
 
+        # Compute PSNR and SSIM
+        psnr_val = psnr(reinhard_target, reinhard_pred, data_range=255)
+        ssim_val = ssim(reinhard_target, reinhard_pred, channel_axis=2, data_range=255)
+
+        # Plot and save comparison
+        fig, axs = plt.subplots(1, 3, figsize=(15, 5))
+        axs[0].imshow(np.array(TF.to_pil_image(input_img)))
+        axs[0].set_title("Input")
+        axs[1].imshow(reinhard_pred)
+        axs[1].set_title("Predicted Reinhard")
+        axs[2].imshow(reinhard_target)
+        axs[2].set_title("GT Reinhard")
+
+        for ax in axs:
+            ax.axis('off')
+
+        fig.suptitle(f"Epoch {epoch} | PSNR: {psnr_val:.2f} | SSIM: {ssim_val:.3f}", fontsize=14)
+        #plt.tight_layout()
+        plt.savefig(os.path.join(triplet_folder, "comparison.png"))
+        plt.close()
 
 def plot_metrics(train_metric, val_metric, metric_name, folder, epoch):
     """
