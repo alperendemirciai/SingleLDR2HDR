@@ -3,7 +3,6 @@ data/
 *.pyc
 *.ipynb
 *.hdr
-*.pdf
 outputs_01hdr/
 outputs_loghdr/
 assets/
