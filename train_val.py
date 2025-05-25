@@ -46,7 +46,7 @@ def train_validate():
     custom_loss = HDRLossWithLPIPS(lpips_weight=2, l1_weight=3)
 
     transform = transforms.Compose([
-        transforms.Resize((224, 224)),
+        #transforms.Resize((224, 224)),
         transforms.RandomHorizontalFlip(),
         transforms.RandomVerticalFlip(),
     ])

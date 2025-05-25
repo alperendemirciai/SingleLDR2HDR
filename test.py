@@ -42,7 +42,7 @@ def test():
     load_checkpoint(checkpoint_path, generator,device= device)
 
     transform = transforms.Compose([
-        transforms.Resize((224, 224)),
+        #transforms.Resize((224, 224)),
     ])
 
     test_dataset = HDRRealDataset(
