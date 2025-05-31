@@ -303,13 +303,20 @@ def save_some_examples(gen, val_loader, epoch, folder, device, num_samples=4, de
         reinhard_target = apply_reinhard_tonemap(target_hdr_np)
         reinhard_pred = apply_reinhard_tonemap(pred_hdr_np)
 
+        tonemapl01_target = tone_mapping_l1_l0_approx(target_hdr_np)
+        tonemapl01_pred = tone_mapping_l1_l0_approx(pred_hdr_np)
+
         # Save Reinhard tonemapped images
         Image.fromarray(reinhard_target).save(os.path.join(triplet_folder, "target_reinhard.png"))
         Image.fromarray(reinhard_pred).save(os.path.join(triplet_folder, "prediction_reinhard.png"))
+        
+        # Save Reinhard tonemapped images
+        Image.fromarray(tonemapl01_target).save(os.path.join(triplet_folder, "target_l0l1.png"))
+        Image.fromarray(tonemapl01_pred).save(os.path.join(triplet_folder, "prediction_l0l1.png"))
 
         # Compute PSNR and SSIM
-        psnr_val = psnr(reinhard_target, reinhard_pred, data_range=255)
-        ssim_val = ssim(reinhard_target, reinhard_pred, channel_axis=2, data_range=255)
+        psnr_val = psnr(reinhard_target/255.0, reinhard_pred/255.0, data_range=1)
+        ssim_val = ssim(reinhard_target/255.0, reinhard_pred/255.0, channel_axis=2, data_range=1)
 
         # Plot and save comparison
         fig, axs = plt.subplots(1, 3, figsize=(15, 5))
@@ -376,23 +383,20 @@ def plot_metric(metric, metric_name, folder, epoch):
     plt.savefig(os.path.join(folder, f"{metric_name}_epoch_{epoch}.png"))
     plt.close()
 
-
-def hdr_tonemapping(image_path, operator='reinhard'):
-    hdr_img = cv2.imread(image_path, cv2.IMREAD_UNCHANGED)
-
-    if hdr_img is None:
-        raise ValueError(f"Image not found at {image_path}")
+from scipy.ndimage import gaussian_filter
     
-    if operator == 'reinhard':
-        tonemapped_img = cv2.createTonemapReinhard(gamma=1.5, intensity=0.0, light_adapt=1.0, color_adapt=0.0).process(hdr_img)
-    elif operator == 'drago':
-        tonemapped_img = cv2.createTonemapDrago(gamma=1.0, saturation=1.0, bias=0.85).process(hdr_img)
-    elif operator == 'mantiuk':
-        tonemapped_img = cv2.createTonemapMantiuk(gamma=2.2, scale=0.85, saturation=1.2).process(hdr_img)
-    else:
-        raise ValueError(f"Unknown tonemapping operator: {operator}")
-    
-    tonemapped_img = cv2.normalize(tonemapped_img, None, 0, 255, cv2.NORM_MINMAX)
-    tonemapped_img = np.uint8(tonemapped_img)
-    return tonemapped_img
-    
+def tone_mapping_l1_l0_approx(hdr_image, sigma=3, compress_factor=0.7):
+    """
+    Approximates Liang et al.'s L1-L0 tone mapping using Gaussian-based layer decomposition.
+    Args:
+        hdr_image: np.array, shape (H, W, C), float32
+    """
+    hdr_image = hdr_image / np.max(hdr_image + 1e-8)  # Normalize
+    log_hdr = np.log1p(hdr_image)
+    base = gaussian_filter(log_hdr, sigma=sigma)
+    detail = log_hdr - base
+    base_compressed = base * compress_factor
+    log_tone_mapped = base_compressed + detail
+    tone_mapped = np.expm1(log_tone_mapped)
+    tone_mapped = np.clip(tone_mapped / np.max(tone_mapped + 1e-8), 0, 1)
+    return (tone_mapped * 255).astype(np.uint8)
