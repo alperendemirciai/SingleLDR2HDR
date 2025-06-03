@@ -1,6 +1,3 @@
-Sure! Here's a polished `README.md` file based on your outline:
-
----
 
 # SingleLDR2HDR
 
